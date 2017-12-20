@@ -1,0 +1,232 @@
+---
+title: "Data Science Application"
+
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+     orientation: rows
+     theme: journal
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(rpart)
+library(tree)
+library(rsconnect)
+```
+
+Sidebar {.sidebar}
+=====================
+```{r}
+
+fileInput(inputId = "metadata",label = "Please upload a csv file")
+uiOutput("dropdown_columns")
+```
+
+EDA
+=====================
+```{r}
+#renderTable({input$data_path}) OR
+observe({
+  if(is.null(input$metadata))
+    return(NULL)
+  data=read.csv(input$metadata$datapath)
+  output$data_preview=renderTable(head(data))
+  
+  #output$nrows=renderText(nrow(data))
+  #output$ncols=renderText(ncol(data))
+  
+  output$columns=renderTable(names(data))
+  
+  check_num=sapply(data,is.numeric)
+  
+  name_num=names(data)[check_num]
+  name_cat=names(data)[!check_num]
+  
+  output$num_col=renderTable(name_num)
+  
+  output$cat_col=renderTable(name_cat)
+  
+  output$dropdown_columns=renderUI({selectInput(inputId = "select_column",label = "Select a column",choices = names(data))})
+  
+  output$dropdown_numeric=renderUI({
+    selectInput(inputId = "select_numeric",label = "Select a column",choices = name_num , multiple = T,selected = name_num[1])
+  })
+  
+  output$dropdown_cat=renderUI({
+    selectInput(inputId="select_categorical",label="Select a column",choices= name_cat)
+  })
+   
+  output$boxplot=renderPlot({
+    boxplot(data[,input$select_numeric])
+  })
+  
+  output$histogram=renderPlot({
+    hist(data[,input$select_numeric])
+  })
+  
+  output$freq_cat=renderPlot({
+   items_freq=data%>%group_by_(input$select_categorical)%>%summarise(count_item=n())%>%
+     arrange(-count_item)%>%head(5)
+   ggplot(items_freq, aes_string(x=input$select_categorical,y='count_item')) +geom_bar(stat='identity')
+  })
+  
+  output$scatter=renderPlot({
+    #plot(data[,input$select_numeric])
+    ggplot(data,aes_string(input$select_numeric[1],input$select_numeric[2],col=input$select_column))+geom_point()
+  })
+  
+  output$cluster_table=renderTable({
+    data_num=data[,name_num]
+    fit=kmeans(na.omit(data_num), centers = input$n_cluster)
+    table(fit$cluster)
+  })
+  
+  output$cluster_slider=renderUI({
+    sliderInput(inputId = "n_cluster",label="choose number of clusters",min=1,max=15,value=5)
+  })
+  
+  output$decision_input=renderUI({
+    selectInput(inputId = "indep_var",label = "Select input variables", choices = names(data),multiple = T)
+  })
+  
+  output$decision_target=renderUI({
+    selectInput(inputId = "dep_var",label = "Select output variables", choices = names(data))
+  })
+  
+  output$decision_tree=renderPlot({
+   # tree=rpart(data[,input$dep_var]~data[,input$indep_var],data)
+    labels= input$dep_var
+    inputs= paste(input$indep_var,collapse = '+')
+    fit_eqn= paste(labels,'~',inputs)
+    fit=tree(fit_eqn,data=data)
+    plot(fit)
+    text(fit)
+  })
+})  
+
+```
+
+column
+---------------------
+
+### PREVIEW OF DATASET
+
+```{r}
+tableOutput("data_preview")
+```
+
+row
+---------------------
+
+### COLUMN NAMES
+
+```{r}
+tableOutput("columns")
+```
+
+### NUMERIC COLUMN
+```{r}
+tableOutput("num_col")
+```
+
+### CATEGORICAL COLUMN
+
+```{r}
+tableOutput("cat_col")
+```
+
+Numerical Column
+===============================
+
+row {data-height=400}
+-------------------------
+### DROPBOX
+
+```{r}
+
+uiOutput("dropdown_numeric")
+```
+
+###SCATTER PLOT
+```{r}
+plotOutput("scatter")
+```
+
+row
+------------------------
+### HISTOGRAM
+```{r}
+plotOutput("histogram")
+```
+
+
+### BOXPLOT
+```{r}
+plotOutput("boxplot")
+```
+
+
+
+Categorical Cloumn
+==============================
+
+row {data-height=300}
+----------------------
+### DROPBOX
+```{r}
+uiOutput("dropdown_cat")
+```
+
+
+row
+--------------------------
+### FREQUENCY DISTRIBUTION
+```{r}
+plotOutput("freq_cat")
+```
+
+K-Means
+==============================
+
+row {data-height=100}
+--------------
+### FILTER
+```{r}
+uiOutput("cluster_slider")
+
+
+```
+
+row 
+--------------------
+### CLUSTER 
+```{r}
+tableOutput("cluster_table")
+```
+
+Decision Trees
+===============================
+
+row {data-height=150}
+--------------------------
+### INDEPENDENT  VARIABLE   SELECTION
+```{r}
+uiOutput("decision_input")
+```
+
+### DEPENDENT VARIABLE  SELECTION
+```{r}
+uiOutput("decision_target")
+```
+
+
+row
+--------------------------
+### DECISION TREE
+
+```{r}
+plotOutput("decision_tree")
+```
+
